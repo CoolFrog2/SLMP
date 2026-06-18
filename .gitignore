@@ -8,3 +8,6 @@ env/
 .DS_Store
 .idea/
 .vscode/
+
+# Az indító (run.ps1) által írt helyi verzió-jelölő
+current_version.txt

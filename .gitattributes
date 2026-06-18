@@ -1,0 +1,8 @@
+# Windows-os szkriptek mindig CRLF sorvégződéssel
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+# Python/web fájlok LF
+*.py  text eol=lf
+*.js  text eol=lf
+*.css text eol=lf
+*.html text eol=lf

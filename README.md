@@ -19,15 +19,35 @@ Az IP címet és portot a weblapon lehet beállítani.
 | `static/style.css`, `static/app.js` | frontend |
 | `mock_plc.py` | mock SLMP PLC szerver teszteléshez (valódi PLC nélkül) |
 | `test_roundtrip.py` | end-to-end teszt a mock ellen |
+| `start.bat` | Windows duplaklikkes indító (stabil bootstrap) |
+| `run.ps1` | GitHub-frissítés (gh/git nélkül) + indítás |
 
-## Indítás
+## Indítás Windows-on (duplaklikk) — ajánlott
+
+1. Töltsd le a projektet egyszer a GitHubról: **Code → Download ZIP**, majd
+   csomagold ki egy mappába (vagy `git clone`, ha van git).
+2. Telepíts **Python**-t, ha még nincs: <https://www.python.org/downloads/>
+   (a telepítőben pipáld be az **„Add Python to PATH”** opciót).
+3. Dupla kattintás a **`start.bat`** fájlra. Ez minden indításkor:
+   - megnézi a GitHubon, van-e újabb verzió, és ha igen, **automatikusan
+     lehúzza** (nem kell hozzá sem `gh`, sem `git` — csak a Windows beépített
+     PowerShellje),
+   - szükség esetén telepíti a függőségeket,
+   - elindítja a szervert, és megnyitja a böngészőt a `http://localhost:5000`
+     címen.
+
+Ha nincs internet, a legutóbb letöltött (helyi) verzió indul. A `start.bat`
+egy stabil bootstrap — a frissítő szándékosan nem írja felül; a tényleges
+logika a `run.ps1`-ben van, ami magát is frissíti.
+
+## Indítás kézzel (bármely platform)
 
 ```bash
 pip install -r requirements.txt
-python3 app.py            # -> http://127.0.0.1:5000  (csak helyi gép)
+python3 app.py            # -> http://<gép-ip>:5000  (a hálózat bármely gépéről)
 ```
 
-Nyisd meg a böngészőben a `http://127.0.0.1:5000` címet, add meg a PLC IP-jét
+Nyisd meg a böngészőben a `http://<gép-ip>:5000` címet, add meg a PLC IP-jét
 és portját (alapból a Q-sorozat SLMP TCP portja gyakran **5007** vagy a
 GX Works-ben beállított érték), majd „Kapcsolat teszt”.
 
@@ -35,36 +55,18 @@ GX Works-ben beállított érték), majd „Kapcsolat teszt”.
 
 | Változó | Alap | Szerep |
 |---------|------|--------|
-| `SLMP_HOST` | `127.0.0.1` | A webszerver kötési címe. LAN-eléréshez: `0.0.0.0`. |
+| `SLMP_HOST` | `0.0.0.0` | A webszerver kötési címe (alapból a hálózat bármely gépéről elérhető). |
 | `SLMP_PORT` | `5000` | A webszerver portja. |
-| `SLMP_DEBUG` | (ki) | `1` esetén Flask debug mód. **Soha ne kapcsold be elérhető környezetben** (RCE!). |
-| `SLMP_TOKEN` | (nincs) | Ha be van állítva, minden `/api/` hívás tokent igényel. |
+| `SLMP_DEBUG` | (ki) | `1` esetén Flask debug mód (fejlesztéshez). |
+| `SLMP_TOKEN` | (nincs) | Opcionális: ha be van állítva, minden `/api/` hívás `X-API-Token` fejlécet igényel. |
 
-LAN-eléréshez + hitelesítéssel:
+A rendszer izolált hálózatra készült, ezért alapból nincs hitelesítés.
+Ha mégis szükséged van rá, állítsd be az `SLMP_TOKEN` env-változót, és a
+weblap „API token” mezőjébe írd be ugyanazt az értéket:
 
 ```bash
-SLMP_HOST=0.0.0.0 SLMP_TOKEN=valami-erős-titok python3 app.py
+SLMP_TOKEN=valami-titok python3 app.py
 ```
-
-Ekkor a weblapon az „API token” mezőbe ugyanezt a tokent kell beírni.
-
-## Biztonság
-
-Ez egy **ICS/PLC vezérlő** eszköz — PLC-be írni fizikai következménnyel járhat.
-Az automata biztonsági review három pontot jelzett, ezeket így kezeljük:
-
-1. **Flask debug mód (RCE):** alapból **kikapcsolva**; csak `SLMP_DEBUG=1`
-   mellett aktiválódik. Ne használd elérhető hálózaton.
-2. **Hitelesítés:** opcionális, `SLMP_TOKEN` környezeti változóval bekapcsolható
-   Bearer/`X-API-Token` token. **Ha a szervert a localhoston kívül is eléri
-   bárki, mindenképp állíts be tokent** (vagy tedd reverse proxy mögé mTLS-sel).
-   Alapból az `SLMP_HOST=127.0.0.1` kötés miatt csak a helyi gépről érhető el.
-3. **Tetszőleges IP/port elérés (SSRF / portszkenner):** ez részben *funkció* —
-   a cél, hogy a PLC IP/portja a weblapon beállítható legyen. Ha nem megbízható
-   hálózaton fut, korlátozd az elérhető célokat (pl. tűzfal/reverse proxy a
-   PLC felé), és kapcsold be a tokent. A `/api/test` a kapcsolódási hibát
-   visszaadja a diagnosztika kedvéért — megbízhatatlan környezetben ez
-   információt szivárogtathat, ezért ott auth mögé tartozik.
 
 ## Tesztelés valódi PLC nélkül
 
