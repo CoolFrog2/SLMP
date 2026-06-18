@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SLMP PLC vezérlő</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header>
+    <h1>SLMP PLC vezérlő</h1>
+    <span class="subtitle">Mitsubishi Q-sorozat · 3E binary keret · TCP</span>
+  </header>
+
+  <!-- Kapcsolat -->
+  <section class="card">
+    <h2>Kapcsolat</h2>
+    <div class="row">
+      <label>IP cím
+        <input type="text" id="ip" placeholder="192.168.0.10" autocomplete="off">
+      </label>
+      <label>Port
+        <input type="number" id="port" placeholder="5000" min="1" max="65535">
+      </label>
+      <label>Timeout (s)
+        <input type="number" id="timeout" value="3" min="1" max="60" step="0.5">
+      </label>
+      <button id="btn-test" class="secondary">Kapcsolat teszt</button>
+      <span id="conn-status" class="status status-unknown">ismeretlen</span>
+    </div>
+  </section>
+
+  <div class="grid">
+    <!-- Olvasás -->
+    <section class="card">
+      <h2>Olvasás</h2>
+      <div class="row">
+        <label>Eszköz
+          <input type="text" id="read-device" placeholder="pl. D100 vagy M0">
+        </label>
+        <label>Darabszám
+          <input type="number" id="read-count" value="1" min="1" max="960">
+        </label>
+        <label>Mód
+          <select id="read-mode">
+            <option value="word">Word</option>
+            <option value="bit">Bit</option>
+          </select>
+        </label>
+        <button id="btn-read">Olvasás</button>
+      </div>
+      <div id="read-result" class="result"></div>
+    </section>
+
+    <!-- Írás -->
+    <section class="card">
+      <h2>Írás</h2>
+      <div class="row">
+        <label>Eszköz
+          <input type="text" id="write-device" placeholder="pl. D100 vagy M0">
+        </label>
+        <label>Mód
+          <select id="write-mode">
+            <option value="word">Word</option>
+            <option value="bit">Bit</option>
+          </select>
+        </label>
+      </div>
+      <div class="row">
+        <label class="grow">Értékek (vesszővel)
+          <input type="text" id="write-values" placeholder="word: 100, 0x1A, 255  ·  bit: 1,0,1">
+        </label>
+        <button id="btn-write" class="danger">Írás</button>
+      </div>
+      <p class="hint" id="write-hint">Word: decimális vagy 0x hex (0–65535). Bit: 0/1.</p>
+      <div id="write-result" class="result"></div>
+    </section>
+  </div>
+
+  <!-- Napló -->
+  <section class="card">
+    <h2>Napló</h2>
+    <div id="log" class="log"></div>
+  </section>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
