@@ -204,16 +204,11 @@ def device_at(device_str, offset):
 
 
 if __name__ == "__main__":
-    # Biztonsági alapértékek:
-    #  - debug ALAPBÓL KIKAPCSOLVA (a Werkzeug debugger távoli kódfuttatást
-    #    tesz lehetővé) — csak SLMP_DEBUG=1 mellett kapcsol be.
-    #  - host alapból 127.0.0.1 (csak helyi gép). LAN-hozzáféréshez állítsd
-    #    SLMP_HOST=0.0.0.0 értékre — ekkor erősen ajánlott az SLMP_TOKEN is.
-    debug = os.environ.get("SLMP_DEBUG") == "1"
-    host = os.environ.get("SLMP_HOST", "127.0.0.1")
+    # Izolált rendszerhez kényelmes alapértékek:
+    #  - host alapból 0.0.0.0 -> a weblap a hálózat bármely gépéről elérhető.
+    #  - debug env-kapcsolós, alapból ki (csak SLMP_DEBUG=1 mellett aktív).
+    # Mind a host/port/debug, mind az opcionális SLMP_TOKEN env-ből állítható.
+    host = os.environ.get("SLMP_HOST", "0.0.0.0")
     port = int(os.environ.get("SLMP_PORT", "5000"))
-    if host == "0.0.0.0" and not API_TOKEN:
-        print("FIGYELEM: a szerver minden interfészen elérhető (0.0.0.0), "
-              "de nincs SLMP_TOKEN beállítva — a PLC írás/olvasás hitelesítés "
-              "nélkül elérhető a hálózaton!")
+    debug = os.environ.get("SLMP_DEBUG") == "1"
     app.run(host=host, port=port, debug=debug)
