@@ -6,6 +6,9 @@ a backend megnyitja a TCP kapcsolatot, elvégzi a műveletet, majd bontja.
 """
 
 import os
+import random
+import threading
+import time
 
 from flask import Flask, render_template, request, jsonify
 
@@ -201,6 +204,134 @@ def device_at(device_str, offset):
         return f"{prefix}{addr}"
     except ValueError:
         return f"{device_str}+{offset}"
+
+
+# ---------------------------------------------------------------------------
+# Random író háttérfeladat
+#   Egy megadott (word) regiszterbe — jellemzően D — adott időközönként
+#   véletlen értéket ír, amíg le nem állítják. Egyszerre egy fut.
+# ---------------------------------------------------------------------------
+class RandomWriter:
+    AUTO_STOP_AFTER = 10  # ennyi egymást követő hiba után automatikus leállás
+
+    def __init__(self):
+        self._thread = None
+        self._stop = None
+        self._lock = threading.Lock()
+        self.status = self._idle_status()
+
+    @staticmethod
+    def _idle_status():
+        return {
+            "running": False, "device": None, "interval_ms": None,
+            "min": None, "max": None, "last_value": None, "last_hex": None,
+            "last_write_at": None, "writes": 0, "errors": 0, "last_error": None,
+        }
+
+    def start(self, host, port, timeout, device, interval_ms, vmin, vmax):
+        with self._lock:
+            # futó példány leállítása (saját stop-eventjével)
+            if self._stop is not None:
+                self._stop.set()
+            stop_event = threading.Event()
+            self._stop = stop_event
+            cfg = {
+                "host": host, "port": port, "timeout": timeout, "device": device,
+                "interval": interval_ms / 1000.0, "vmin": vmin, "vmax": vmax,
+            }
+            self.status = self._idle_status()
+            self.status.update({
+                "running": True, "device": device, "interval_ms": interval_ms,
+                "min": vmin, "max": vmax,
+            })
+            self._thread = threading.Thread(
+                target=self._run, args=(stop_event, cfg), daemon=True)
+            self._thread.start()
+
+    def stop(self):
+        with self._lock:
+            if self._stop is not None:
+                self._stop.set()
+            self._thread = None
+            self.status["running"] = False
+
+    def _run(self, stop_event, cfg):
+        consecutive = 0
+        while not stop_event.is_set():
+            value = random.randint(cfg["vmin"], cfg["vmax"])
+            try:
+                with SlmpClient(cfg["host"], cfg["port"], timeout=cfg["timeout"]) as client:
+                    client.write_words(cfg["device"], [value])
+                with self._lock:
+                    if stop_event.is_set():
+                        break
+                    self.status["last_value"] = value
+                    self.status["last_hex"] = f"0x{value:04X}"
+                    self.status["last_write_at"] = time.time()
+                    self.status["writes"] += 1
+                consecutive = 0
+            except Exception as e:  # SLMP/hálózati hiba: jelöljük, de tovább próbáljuk
+                consecutive += 1
+                with self._lock:
+                    self.status["errors"] += 1
+                    self.status["last_error"] = str(e)
+                    if consecutive >= self.AUTO_STOP_AFTER:
+                        self.status["running"] = False
+                        self.status["last_error"] = \
+                            f"Automatikus leállás {consecutive} hiba után: {e}"
+                if consecutive >= self.AUTO_STOP_AFTER:
+                    break
+            stop_event.wait(cfg["interval"])
+
+    def get_status(self):
+        with self._lock:
+            return dict(self.status)
+
+
+random_writer = RandomWriter()
+
+
+@app.route("/api/random/start", methods=["POST"])
+def api_random_start():
+    data = request.get_json(force=True, silent=True) or {}
+    try:
+        host = (data.get("ip") or "").strip()
+        port = data.get("port")
+        if not host:
+            raise ValueError("Hiányzó IP cím.")
+        if not port:
+            raise ValueError("Hiányzó port.")
+        timeout = float(data.get("timeout", 3.0))
+        device = (data.get("device") or "").strip()
+        parse_device(device)  # korai validáció (a word-írás bármely word-eszközre megy)
+        interval_ms = int(data.get("interval", 1000))
+        if interval_ms < 200 or interval_ms > 60000:
+            raise ValueError("Az intervallum 200 és 60000 ms között lehet.")
+        vmin = _parse_word_value(data.get("min", 0))
+        vmax = _parse_word_value(data.get("max", 65535))
+        if vmin > vmax:
+            raise ValueError("A minimum nem lehet nagyobb a maximumnál.")
+    except (ValueError, TypeError) as e:
+        return _error(str(e))
+
+    random_writer.start(host, int(port), timeout, device, interval_ms, vmin, vmax)
+    return jsonify({
+        "ok": True,
+        "message": f"Random írás indítva: {device} minden {interval_ms} ms-ben ({vmin}–{vmax})",
+        "status": random_writer.get_status(),
+    })
+
+
+@app.route("/api/random/stop", methods=["POST"])
+def api_random_stop():
+    random_writer.stop()
+    return jsonify({"ok": True, "message": "Random írás leállítva.",
+                    "status": random_writer.get_status()})
+
+
+@app.route("/api/random/status", methods=["GET", "POST"])
+def api_random_status():
+    return jsonify({"ok": True, "status": random_writer.get_status()})
 
 
 if __name__ == "__main__":

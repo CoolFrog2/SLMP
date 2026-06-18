@@ -390,6 +390,30 @@ input:focus {
 .msg-ok { color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); border: 1px solid color-mix(in srgb, var(--green) 30%, transparent); }
 .msg-err { color: var(--red); background: color-mix(in srgb, var(--red) 12%, transparent); border: 1px solid color-mix(in srgb, var(--red) 30%, transparent); }
 
+/* ---- Random író ---- */
+.rnd-pill[data-state="unknown"] { color: var(--muted); }
+.rnd-pill[data-state="running"] { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, var(--border)); }
+.rnd-pill[data-state="running"] .conn-dot { background: var(--green); box-shadow: 0 0 0 4px var(--green-glow); animation: pulse 1.8s infinite; }
+
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-top: 16px;
+}
+@media (max-width: 600px) { .stat-row { grid-template-columns: repeat(2, 1fr); } }
+.stat {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+}
+.stat-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 600; }
+.stat-val { font-family: var(--mono); font-size: 1.05rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat-val.flash { animation: flash 0.5s ease; }
+@keyframes flash { 0% { color: var(--accent-2); } 100% { color: var(--text); } }
+
 /* ---- Napló konzol ---- */
 .console {
   font-family: var(--mono);

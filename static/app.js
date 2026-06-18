@@ -296,9 +296,142 @@ function updateHint() {
 ["write-device", "write-values"].forEach((id) =>
   $(id).addEventListener("keydown", (e) => { if (e.key === "Enter") $("btn-write").click(); }));
 
+/* ===================== Random író ===================== */
+let rndPoll = null;
+let rndRunning = false;
+
+function rndSetRunning(running) {
+  rndRunning = running;
+  const btn = $("btn-rnd-toggle");
+  const label = btn.querySelector("span");
+  const state = $("rnd-state");
+  if (running) {
+    btn.classList.replace("btn-primary", "btn-danger");
+    label.textContent = "Leállítás";
+    state.dataset.state = "running";
+  } else {
+    btn.classList.replace("btn-danger", "btn-primary");
+    label.textContent = "Indítás";
+    state.dataset.state = "unknown";
+    $("rnd-state-text").textContent = "leállítva";
+  }
+}
+
+function agoText(epochSec) {
+  const diff = Date.now() / 1000 - epochSec;
+  if (diff < 1.5) return "most";
+  if (diff < 60) return `${Math.round(diff)} mp-e`;
+  return `${Math.round(diff / 60)} perce`;
+}
+
+function rndRenderStatus(s) {
+  const lastEl = $("rnd-last");
+  const newVal = (s.last_value === null || s.last_value === undefined)
+    ? "—" : `${s.last_value} · ${s.last_hex}`;
+  if (newVal !== "—" && lastEl.textContent !== newVal) {
+    lastEl.classList.remove("flash");
+    void lastEl.offsetWidth;        // reflow -> animáció újrajátszása
+    lastEl.classList.add("flash");
+  }
+  lastEl.textContent = newVal;
+  $("rnd-writes").textContent = s.writes ?? 0;
+  $("rnd-errors").textContent = s.errors ?? 0;
+  $("rnd-when").textContent = s.last_write_at ? agoText(s.last_write_at) : "—";
+  if (s.running) $("rnd-state-text").textContent = `fut · ${s.device} / ${s.interval_ms} ms`;
+}
+
+function rndStartPolling() {
+  rndStopPolling();
+  rndPoll = setInterval(rndPollStatus, 1000);
+}
+function rndStopPolling() {
+  if (rndPoll) { clearInterval(rndPoll); rndPoll = null; }
+}
+
+async function rndPollStatus() {
+  try {
+    const d = await apiPost("/api/random/status", {});
+    rndRenderStatus(d.status);
+    if (!d.status.running && rndRunning) {     // a szerver állította le (pl. auto-stop)
+      rndStopPolling();
+      rndSetRunning(false);
+      const reason = d.status.last_error || "ismeretlen ok";
+      toast("Random író leállt: " + reason, "err");
+      log("Random író leállt: " + reason, "err");
+    }
+  } catch (e) {
+    rndStopPolling();
+    rndSetRunning(false);
+    toast("Random státusz hiba: " + e.message, "err");
+  }
+}
+
+$("btn-rnd-toggle").addEventListener("click", async () => {
+  const btn = $("btn-rnd-toggle");
+
+  if (rndRunning) {
+    busy(btn, true);
+    try {
+      const d = await apiPost("/api/random/stop", {});
+      rndStopPolling();
+      rndSetRunning(false);
+      rndRenderStatus(d.status);
+      toast("Random írás leállítva.", "ok");
+      log("Random írás leállítva.", "ok");
+    } catch (e) {
+      toast("Leállítás hiba: " + e.message, "err");
+    } finally {
+      busy(btn, false);
+    }
+    return;
+  }
+
+  const device = $("rnd-device").value.trim();
+  if (!device) { toast("Adj meg egy D regisztert!", "err"); return; }
+  const params = {
+    ...connParams(),
+    device,
+    interval: parseInt($("rnd-interval").value, 10) || 1000,
+    min: parseInt($("rnd-min").value, 10) || 0,
+    max: isNaN(parseInt($("rnd-max").value, 10)) ? 65535 : parseInt($("rnd-max").value, 10),
+  };
+  busy(btn, true);
+  try {
+    const d = await apiPost("/api/random/start", params);
+    rndSetRunning(true);
+    rndRenderStatus(d.status);
+    rndStartPolling();
+    setConnState("ok", "kapcsolat él");
+    toast(d.message, "ok");
+    log(d.message, "ok");
+  } catch (e) {
+    toast("Random indítás hiba: " + e.message, "err");
+    log("Random indítás hiba: " + e.message, "err");
+  } finally {
+    busy(btn, false);
+  }
+});
+
+// Oldalbetöltéskor: ha a szerveren már fut a random író, tükrözzük az állapotot.
+async function rndInit() {
+  try {
+    const d = await apiPost("/api/random/status", {});
+    if (d.status.running) {
+      if (d.status.device) $("rnd-device").value = d.status.device;
+      if (d.status.interval_ms) $("rnd-interval").value = d.status.interval_ms;
+      if (d.status.min !== null && d.status.min !== undefined) $("rnd-min").value = d.status.min;
+      if (d.status.max !== null && d.status.max !== undefined) $("rnd-max").value = d.status.max;
+      rndSetRunning(true);
+      rndRenderStatus(d.status);
+      rndStartPolling();
+    }
+  } catch (e) { /* csendben — pl. ha token kell és még nincs megadva */ }
+}
+
 /* ===================== Indítás ===================== */
 initSegment("read-mode");
 initSegment("write-mode", updateHint);
 loadPrefs();
 updateHint();
+rndInit();
 log("Frontend betöltve. Állítsd be az IP-t és portot, majd tesztelj.", "info");
