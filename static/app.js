@@ -3,7 +3,7 @@
 const $ = (id) => document.getElementById(id);
 
 // --- Kapcsolat mezők megőrzése localStorage-ben -------------------------
-const CONN_KEYS = ["ip", "port", "timeout"];
+const CONN_KEYS = ["ip", "port", "timeout", "token"];
 function loadConn() {
   CONN_KEYS.forEach((k) => {
     const v = localStorage.getItem("slmp_" + k);
@@ -40,9 +40,12 @@ function connParams() {
 
 // --- API hívás -----------------------------------------------------------
 async function apiPost(path, body) {
+  const headers = { "Content-Type": "application/json" };
+  const token = $("token").value.trim();
+  if (token) headers["X-API-Token"] = token;
   const res = await fetch(path, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(body),
   });
   let data;

@@ -24,12 +24,47 @@ Az IP címet és portot a weblapon lehet beállítani.
 
 ```bash
 pip install -r requirements.txt
-python3 app.py            # -> http://0.0.0.0:5000
+python3 app.py            # -> http://127.0.0.1:5000  (csak helyi gép)
 ```
 
-Nyisd meg a böngészőben a `http://<gép-ip>:5000` címet, add meg a PLC IP-jét
+Nyisd meg a böngészőben a `http://127.0.0.1:5000` címet, add meg a PLC IP-jét
 és portját (alapból a Q-sorozat SLMP TCP portja gyakran **5007** vagy a
 GX Works-ben beállított érték), majd „Kapcsolat teszt”.
+
+### Környezeti változók
+
+| Változó | Alap | Szerep |
+|---------|------|--------|
+| `SLMP_HOST` | `127.0.0.1` | A webszerver kötési címe. LAN-eléréshez: `0.0.0.0`. |
+| `SLMP_PORT` | `5000` | A webszerver portja. |
+| `SLMP_DEBUG` | (ki) | `1` esetén Flask debug mód. **Soha ne kapcsold be elérhető környezetben** (RCE!). |
+| `SLMP_TOKEN` | (nincs) | Ha be van állítva, minden `/api/` hívás tokent igényel. |
+
+LAN-eléréshez + hitelesítéssel:
+
+```bash
+SLMP_HOST=0.0.0.0 SLMP_TOKEN=valami-erős-titok python3 app.py
+```
+
+Ekkor a weblapon az „API token” mezőbe ugyanezt a tokent kell beírni.
+
+## Biztonság
+
+Ez egy **ICS/PLC vezérlő** eszköz — PLC-be írni fizikai következménnyel járhat.
+Az automata biztonsági review három pontot jelzett, ezeket így kezeljük:
+
+1. **Flask debug mód (RCE):** alapból **kikapcsolva**; csak `SLMP_DEBUG=1`
+   mellett aktiválódik. Ne használd elérhető hálózaton.
+2. **Hitelesítés:** opcionális, `SLMP_TOKEN` környezeti változóval bekapcsolható
+   Bearer/`X-API-Token` token. **Ha a szervert a localhoston kívül is eléri
+   bárki, mindenképp állíts be tokent** (vagy tedd reverse proxy mögé mTLS-sel).
+   Alapból az `SLMP_HOST=127.0.0.1` kötés miatt csak a helyi gépről érhető el.
+3. **Tetszőleges IP/port elérés (SSRF / portszkenner):** ez részben *funkció* —
+   a cél, hogy a PLC IP/portja a weblapon beállítható legyen. Ha nem megbízható
+   hálózaton fut, korlátozd az elérhető célokat (pl. tűzfal/reverse proxy a
+   PLC felé), és kapcsold be a tokent. A `/api/test` a kapcsolódási hibát
+   visszaadja a diagnosztika kedvéért — megbízhatatlan környezetben ez
+   információt szivárogtathat, ezért ott auth mögé tartozik.
 
 ## Tesztelés valódi PLC nélkül
 

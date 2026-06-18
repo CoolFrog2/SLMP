@@ -5,11 +5,32 @@ A kapcsolat állapotmentes: az IP/port minden kéréssel érkezik a frontendről
 a backend megnyitja a TCP kapcsolatot, elvégzi a műveletet, majd bontja.
 """
 
+import os
+
 from flask import Flask, render_template, request, jsonify
 
 from slmp import SlmpClient, SlmpError, DEVICES, parse_device
 
 app = Flask(__name__)
+
+# Opcionális token-alapú hitelesítés. Ha az SLMP_TOKEN környezeti változó be
+# van állítva, minden /api/ kérés Authorization: Bearer <token> vagy
+# X-API-Token: <token> fejlécet igényel. Ha nincs beállítva, a hitelesítés ki
+# van kapcsolva (gyors helyi használat). ICS/PLC írásnál erősen ajánlott!
+API_TOKEN = os.environ.get("SLMP_TOKEN")
+
+
+@app.before_request
+def _require_token():
+    if not API_TOKEN:
+        return  # auth kikapcsolva
+    if not request.path.startswith("/api/"):
+        return
+    auth = request.headers.get("Authorization", "")
+    token = auth[7:].strip() if auth.startswith("Bearer ") else \
+        request.headers.get("X-API-Token", "")
+    if token != API_TOKEN:
+        return jsonify({"ok": False, "error": "Hitelesítés szükséges (érvénytelen vagy hiányzó token)."}), 401
 
 
 # ---------------------------------------------------------------------------
@@ -183,4 +204,16 @@ def device_at(device_str, offset):
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    # Biztonsági alapértékek:
+    #  - debug ALAPBÓL KIKAPCSOLVA (a Werkzeug debugger távoli kódfuttatást
+    #    tesz lehetővé) — csak SLMP_DEBUG=1 mellett kapcsol be.
+    #  - host alapból 127.0.0.1 (csak helyi gép). LAN-hozzáféréshez állítsd
+    #    SLMP_HOST=0.0.0.0 értékre — ekkor erősen ajánlott az SLMP_TOKEN is.
+    debug = os.environ.get("SLMP_DEBUG") == "1"
+    host = os.environ.get("SLMP_HOST", "127.0.0.1")
+    port = int(os.environ.get("SLMP_PORT", "5000"))
+    if host == "0.0.0.0" and not API_TOKEN:
+        print("FIGYELEM: a szerver minden interfészen elérhető (0.0.0.0), "
+              "de nincs SLMP_TOKEN beállítva — a PLC írás/olvasás hitelesítés "
+              "nélkül elérhető a hálózaton!")
+    app.run(host=host, port=port, debug=debug)
